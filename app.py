@@ -43,6 +43,60 @@ def chat():
 @app.route("/pdf")
 def pdf_page():
     return render_template("pdf.html")
+@app.route("/notes")
+def notes_page():
+    return render_template("notes.html")
+
+@app.route("/summarize-notes", methods=["POST"])
+def summarize_notes():
+    data = request.json
+    notes_text = data.get("notes", "")
+
+    if not notes_text.strip():
+        return jsonify({"error": "No notes provided"}), 400
+
+    raw = ask_ai(
+        """You are an expert study assistant.
+Analyze the student's notes and return ONLY a valid JSON object like this:
+{
+  "title": "Topic title in 5 words",
+  "summary": "Clear 3-4 sentence summary of the notes",
+  "key_points": [
+    "Key point 1",
+    "Key point 2",
+    "Key point 3",
+    "Key point 4",
+    "Key point 5"
+  ],
+  "important_terms": [
+    {"term": "Term 1", "meaning": "Short definition"},
+    {"term": "Term 2", "meaning": "Short definition"},
+    {"term": "Term 3", "meaning": "Short definition"}
+  ],
+  "quiz": [
+    {"question": "Question 1?", "answer": "Answer 1"},
+    {"question": "Question 2?", "answer": "Answer 2"},
+    {"question": "Question 3?", "answer": "Answer 3"}
+  ],
+  "study_tips": ["Tip 1", "Tip 2", "Tip 3"],
+  "difficulty": "Beginner or Intermediate or Advanced"
+}
+Return ONLY JSON. No markdown. No extra text.""",
+        f"Student Notes:\n{notes_text[:5000]}",
+        max_tokens=1500
+    )
+
+    try:
+        raw = raw.replace("```json","").replace("```","").strip()
+        s = raw.find("{")
+        e = raw.rfind("}") + 1
+        result = json.loads(raw[s:e])
+        session["pdf_text"] = notes_text
+        session["pdf_title"] = result.get("title", "Notes")
+        return jsonify(result)
+    except Exception as ex:
+        print("Notes parse error:", ex)
+        return jsonify({"error": "AI parsing failed. Try again."}), 500
 
 
 # ── TEST ───────────────────────────────────────────
